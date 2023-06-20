@@ -9,49 +9,44 @@ terraform {
   }
   # バックエンド設定。tfstateファイルを AWS S3 へ保存。
   backend "s3" {
-    bucket = "gsd-terraform-state" # 作成したS3バケット
+    # 作成した S3バケット
+    bucket = "gsd-terraform-state"
+    # 作成した S3バケットのリージョン
     region = "ap-northeast-1"
+    # tfstateファイルの保存先（パス）
     key = "terraform.tfstate"
+    # tfstateファイルをサーバー側で暗号化するか
     encrypt = true
   }
 }
 
 
 ##############################################
-# AWS アクセスキー情報
+# AWS アクセスキー情報（入力要求）
 ##############################################
-# 入力要求
 variable "AWS_ACCESS_KEY_ID" {}
 variable "AWS_SECRET_ACCESS_KEY" {}
-
-# ローカルでの作業時
-# variable "acs_key" {
-#   default = ""
-# }
-# variable "sec_key" {
-#   default = ""
-# }
 ##############################################
 
 
 # AWS Provider. I AM ユーザーのようなもの
 provider "aws" {
-  region = "ap-northeast-1" # アジアパシフィック（東京）
+  region = local.region
+
+  # 入力要求時
   access_key = var.AWS_ACCESS_KEY_ID
   secret_key = var.AWS_SECRET_ACCESS_KEY
 
-  # ローカルでの作業時
-  # access_key = var.acs_key
-  # secret_key = var.sec_key
+  # const.tf 使用時
+  # access_key = local.iam.AWS_ACCESS_KEY_ID
+  # secret_key = local.iam.AWS_SECRET_ACCESS_KEY
 }
-
-
 
 # VPC. VPCの起動構成の設定
 resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block = local.vpc.cidr_block
   tags = {
-    Name = "vpc_name"
+    Name = local.vpc.name
   }
 }
 
@@ -60,18 +55,19 @@ resource "aws_internet_gateway" "main" {
   # aws_vpc.main: 上で定義した VPC を参照
   vpc_id = aws_vpc.main.id
   tags = {
-    Name = "vpc_name"
+    Name = local.vpc.name
   }
 }
 
 # Public Subnet
 resource "aws_subnet" "public" {
+  for_each          = local.vpc.subnet.public
   vpc_id            = aws_vpc.main.id
-  availability_zone = "ap-northeast-1a"
-  cidr_block        = "10.0.0.0/24"
+  availability_zone = "${local.region}${each.key}"
+  cidr_block        = each.value
 
   tags = {
-    Name = "env-public-a"
+    Name = "env-public-${each.key}"
   }
 }
 
@@ -90,21 +86,20 @@ resource "aws_route" "public" {
   gateway_id             = aws_internet_gateway.main.id
 }
 
-
-
 # EC2 Instance
 resource "aws_instance" "main" {
-  # AMI ID: Amazon Linux 2023 AMI（東京リージョン）
-  ami           = "ami-0f9816f78187c68fb"
-  instance_type = "t2.micro"
+  ami           = local.ec2.ami
+  instance_type = local.ec2.instance_type
   tags = {
-    Name = "gsd0000"
+    Name = local.ec2.name
   }
 }
 
-
-
 # $%& DEBUG
 output "output" {
-  value = ""
+  value = local.project
 }
+
+/*
+
+# */
