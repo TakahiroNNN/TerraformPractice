@@ -1,43 +1,43 @@
-# Terraformの設定情報 
+#########################################################
+# 
+#【概要】
+# TerraformによるEC2起動の自動化のソースコード
+# 
+#【備考】
+# アクセスキー/シークレットアクセスキー を const.tf に
+# ハードコーディングする場合は、別途コメントアウト部分を切り替える必要がある
+# （【】部分に記載）
+# 
+#########################################################
+
+
 terraform {
-  # AWSのプロバイダ設定
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 4.0"
     }
   }
-  # バックエンド設定。tfstateファイルを AWS S3 へ保存。
-  backend "s3" {
-    # 作成した S3バケット
-    bucket = "gsd-terraform-state"
-    # 作成した S3バケットのリージョン
-    region = "ap-northeast-1"
-    # tfstateファイルの保存先（パス）
-    key = "terraform.tfstate"
-    # tfstateファイルをサーバー側で暗号化するか
-    encrypt = true
-  }
 }
 
 
 ##############################################
-# AWS アクセスキー情報（入力要求）
+# 【AWS アクセスキー情報（入力要求）】
+# ※ const.tf 使用時はコメントアウトすること
 ##############################################
 variable "AWS_ACCESS_KEY_ID" {}
 variable "AWS_SECRET_ACCESS_KEY" {}
 ##############################################
 
 
-# AWS Provider. I AM ユーザーのようなもの
 provider "aws" {
-  region = local.region
+  region = local.iam.region
 
-  # 入力要求時
+  # 【入力要求時】
   access_key = var.AWS_ACCESS_KEY_ID
   secret_key = var.AWS_SECRET_ACCESS_KEY
 
-  # const.tf 使用時
+  # 【const.tf 使用時】
   # access_key = local.iam.AWS_ACCESS_KEY_ID
   # secret_key = local.iam.AWS_SECRET_ACCESS_KEY
 }
@@ -52,7 +52,6 @@ resource "aws_vpc" "main" {
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
-  # aws_vpc.main: 上で定義した VPC を参照
   vpc_id = aws_vpc.main.id
   tags = {
     Name = local.vpc.name
