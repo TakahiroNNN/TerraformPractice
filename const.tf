@@ -28,15 +28,17 @@ locals {
     # CIDR(Classless Inter-Domain Routing)
     cidr_block = "10.0.0.0/16"
     # タグ付けする名前
-    name = "vpc_name"
+    name = "gsd-vpc"
     # サブネットについて
     subnet = {
       # パブリックサブネット
       public = {
-        # 1
+        # 1 (EC2 を紐づけるサブネット)
         a = "10.0.0.0/24"
         # 2
-        # c = "10.0.4.0/24"
+        c = "10.0.4.0/24"
+        # 3
+        d = "10.0.16.0/24"
       }
     }
   }
@@ -49,5 +51,60 @@ locals {
     ami = "ami-0f9816f78187c68fb"
     # インスタンスタイプ
     instance_type = "t2.micro"
+    # キーペア（ログイン）
+    key_name = "gsd-InfraAutomation"
+  }
+
+  # セキュリティグループに関して
+  security_group = {
+    # セキュリティグループ名
+    name = "group000"
+    # 説明
+    description = "just test"
+    # インバウンドルールに関して
+    ingress = {
+      # インバウンドルール000
+      rule_000 = {
+        # プロトコル
+        protocol = "tcp"
+        # ポート範囲（下限）
+        from_port = 22
+        # ポート範囲（上限）
+        to_port = 22
+        # ソース
+        cidr_blocks = ["10.0.0.0/32", "175.177.47.46/32"]
+        # 説明 - オプション
+        description = "ssh"
+      }
+      # インバウンドルール001
+      rule_001 = {
+        # プロトコル
+        protocol = "tcp"
+        # ポート範囲（下限）
+        from_port = 80
+        # ポート範囲（上限）
+        to_port = 80
+        # ソース
+        cidr_blocks = ["10.0.0.0/32", "255.255.255.255/32", "175.177.47.46/32"]
+        # 説明 - オプション
+        description = "http"
+      }
+    }
+    # アウトバウンドルールに関して
+    egress = {
+      # アウトバウンドルール000
+      rule_000 = {
+        # プロトコル
+        protocol = "-1"
+        # ポート範囲（下限）
+        from_port = 0
+        # ポート範囲（上限）
+        to_port = 0
+        # ソース
+        cidr_blocks = ["0.0.0.0/0"]
+        # 説明 - オプション
+        description = "just test"
+      }
+    }
   }
 }

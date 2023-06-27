@@ -25,8 +25,8 @@ terraform {
 # 【AWS アクセスキー情報（入力要求）】
 # ※ const.tf 使用時はコメントアウトすること
 ##############################################
-variable "AWS_ACCESS_KEY_ID" {}
-variable "AWS_SECRET_ACCESS_KEY" {}
+# variable "AWS_ACCESS_KEY_ID" {}
+# variable "AWS_SECRET_ACCESS_KEY" {}
 ##############################################
 
 
@@ -34,12 +34,12 @@ provider "aws" {
   region = local.iam.region
 
   # 【入力要求時】
-  access_key = var.AWS_ACCESS_KEY_ID
-  secret_key = var.AWS_SECRET_ACCESS_KEY
+  # access_key = var.AWS_ACCESS_KEY_ID
+  # secret_key = var.AWS_SECRET_ACCESS_KEY
 
   # 【const.tf 使用時】
-  # access_key = local.iam.AWS_ACCESS_KEY_ID
-  # secret_key = local.iam.AWS_SECRET_ACCESS_KEY
+  access_key = local.iam.AWS_ACCESS_KEY_ID
+  secret_key = local.iam.AWS_SECRET_ACCESS_KEY
 }
 
 # VPC. VPCの起動構成の設定
@@ -50,23 +50,14 @@ resource "aws_vpc" "main" {
   }
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-  tags = {
-    Name = local.vpc.name
-  }
-}
-
 # Public Subnet
 resource "aws_subnet" "public" {
-  for_each          = local.vpc.subnet.public
+  for_each = local.vpc.subnet.public
   vpc_id            = aws_vpc.main.id
-  availability_zone = "${local.region}${each.key}"
+  availability_zone = "${local.iam.region}${each.key}"
   cidr_block        = each.value
-
   tags = {
-    Name = "env-public-${each.key}"
+    Name = "gsd-public-${each.key}"
   }
 }
 
@@ -74,29 +65,93 @@ resource "aws_subnet" "public" {
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   tags = {
-    Name = "env-public"
+    Name = "gsd-route-table"
   }
 }
 
-# Route Table Entry.パケットの送信先としてターゲットを指定する単一のルーティングルール
+# Subnet と RouteTable の関連付け
+resource "aws_route_table_association" "rtb_asc" {
+  for_each = local.vpc.subnet.public
+  subnet_id      = aws_subnet.public[each.key].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = local.vpc.name
+  }
+}
+
+# Route Table Entry. (RouteTable と InternetGateway の関連付け)
 resource "aws_route" "public" {
   destination_cidr_block = "0.0.0.0/0"
   route_table_id         = aws_route_table.public.id
-  gateway_id             = aws_internet_gateway.main.id
+  gateway_id             = aws_internet_gateway.igw.id
+}
+
+# Security Group
+resource "aws_security_group" "sec_group" {
+  name        = local.security_group.name
+  description = local.security_group.description
+  vpc_id      = aws_vpc.main.id
+  tags = {
+    Name = "${local.security_group.name}"
+  }
+}
+
+# Security Group Rule (ingress)
+resource "aws_security_group_rule" "ingress" {
+  for_each          = local.security_group.ingress
+  security_group_id = aws_security_group.sec_group.id
+  type              = "ingress"
+  protocol          = each.value.protocol
+  from_port         = each.value.from_port
+  to_port           = each.value.to_port
+  cidr_blocks       = each.value.cidr_blocks
+  description       = each.value.description
+}
+
+# Security Group Rule (egress)
+resource "aws_security_group_rule" "egress" {
+  for_each          = local.security_group.egress
+  security_group_id = aws_security_group.sec_group.id
+  type              = "egress"
+  protocol          = each.value.protocol
+  from_port         = each.value.from_port
+  to_port           = each.value.to_port
+  cidr_blocks       = each.value.cidr_blocks
+  description       = each.value.description
 }
 
 # EC2 Instance
 resource "aws_instance" "main" {
-  ami           = local.ec2.ami
-  instance_type = local.ec2.instance_type
+  ami                    = local.ec2.ami
+  instance_type          = local.ec2.instance_type
+  key_name               = local.ec2.key_name
+  vpc_security_group_ids = [aws_security_group.sec_group.id]
+  subnet_id = aws_subnet.public[keys(local.vpc.subnet.public)[0]].id
+  associate_public_ip_address = true
   tags = {
     Name = local.ec2.name
   }
 }
 
+# Elastic IP
+resource "aws_eip" "main" {
+  instance = aws_instance.main.id
+  tags = {
+    Name = local.ec2.name
+  }
+}
+
+
 # $%& DEBUG
 output "output" {
-  value = local.project
+  value = [local.project, aws_eip.main.public_ip]
+  # value = aws_subnet.public["a"]
+  # value = aws_route_table_association.rtb_asc
 }
 
 /*

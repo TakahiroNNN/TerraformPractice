@@ -13,8 +13,8 @@
 
 terraform {
   # ローカルに保存する場合
-  backend "local" {
-  }
+  # backend "local" {
+  # }
 
   # AWS S3 に保存する場合
   backend "s3" {
